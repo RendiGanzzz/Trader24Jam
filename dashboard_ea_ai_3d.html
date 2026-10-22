@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlgoTrade AI Core - Pro Dashboard & Strategy Tester</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Three.js for 3D AI Core -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- TradingView Lightweight Charts for Candlesticks -->
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        dash: {
+                            bg: '#010308',
+                            panel: '#070C15',
+                            border: '#1A2333',
+                            cyan: '#00D1FF',
+                            blue: '#1A66FF',
+                            yellow: '#FFD700',
+                            green: '#00E676',
+                            red: '#FF1744',
+                            text: '#7A8CBA'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #010308;
+            background-image: radial-gradient(circle at 50% -20%, #0A192F 0%, #010308 60%);
+            color: #ffffff;
+            overflow: hidden; /* Prevent body scroll */
+        }
+        .glass-panel {
+            background: linear-gradient(145deg, rgba(7, 12, 21, 0.75) 0%, rgba(3, 5, 10, 0.9) 100%);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        }
+        .terminal-scroll::-webkit-scrollbar { width: 4px; }
+        .terminal-scroll::-webkit-scrollbar-track { background: transparent; }
+        .terminal-scroll::-webkit-scrollbar-thumb { background: #1A2333; border-radius: 4px; }
+        
+        .glow-cyan { text-shadow: 0 0 15px rgba(0, 209, 255, 0.8); box-shadow: 0 0 25px rgba(0, 209, 255, 0.25), inset 0 0 10px rgba(0, 209, 255, 0.1); }
+        .glow-yellow { text-shadow: 0 0 15px rgba(255, 215, 0, 0.8); box-shadow: 0 0 25px rgba(255, 215, 0, 0.25); }
+        .glow-green { text-shadow: 0 0 15px rgba(0, 230, 118, 0.8); box-shadow: 0 0 25px rgba(0, 230, 118, 0.25); }
+        .glow-red { text-shadow: 0 0 15px rgba(255, 23, 68, 0.8); box-shadow: 0 0 25px rgba(255, 23, 68, 0.25); }
+    </style>
+</head>
+<body class="antialiased h-screen flex flex-col p-2 gap-2">
+
+    <!-- Top Navigation -->
+    <header class="h-14 glass-panel rounded-lg flex items-center justify-between px-6 z-20 flex-shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded border border-dash-cyan bg-dash-cyan/10 flex items-center justify-center font-bold text-dash-cyan shadow-[0_0_10px_rgba(0,229,255,0.3)]">
+                AI
+            </div>
+            <span class="font-bold text-lg tracking-wide uppercase">Core <span class="text-dash-cyan font-mono text-sm ml-1">[ONLINE]</span></span>
+        </div>
+        <div class="flex items-center gap-6 text-xs font-mono">
+            <div class="flex items-center gap-2">
+                <span class="text-dash-text">TIMEFRAME:</span>
+                <select id="global-timeframe" onchange="changeTimeframe(this.value)" class="bg-dash-bg border border-dash-border text-dash-cyan rounded px-2 py-1 text-xs font-bold outline-none cursor-pointer">
+                    <option value="M1">M1</option>
+                    <option value="M5">M5</option>
+                    <option value="M15" selected>M15</option>
+                    <option value="H1">H1</option>
+                    <option value="H4">H4</option>
+                    <option value="D1">D1</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-dash-text">MODE:</span>
+                <span id="header-mode" class="text-dash-cyan">LIVE EA SYNC</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-dash-green shadow-[0_0_8px_#00E676] animate-pulse"></span>
+                <span class="text-dash-text">LATENCY: 7ms</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-2 min-h-0">
+        
+        <!-- LEFT PANEL: Controls, Metrics, Strategy Tester, Terminal -->
+        <div class="lg:col-span-3 flex flex-col gap-2 min-h-0 overflow-y-auto terminal-scroll pr-1">
+            
+            <!-- Tabs Switcher -->
+            <div class="glass-panel p-1 rounded-xl flex gap-1 flex-shrink-0 font-mono text-xs">
+                <button onclick="switchTab('live')" id="tab-live" class="flex-1 py-2 rounded-lg bg-dash-cyan/20 text-dash-cyan font-bold transition-all">LIVE EA</button>
+                <button onclick="switchTab('tester')" id="tab-tester" class="flex-1 py-2 rounded-lg text-dash-text hover:text-white transition-all">BACKTESTER</button>
+            </div>
+
+            <!-- LIVE EA CONTROLS -->
+            <div id="panel-live" class="flex flex-col gap-2 flex-shrink-0">
+                <div class="glass-panel p-4 rounded-xl">
+                    <div class="mb-3 font-mono text-[10px] text-dash-cyan uppercase tracking-[0.2em] border-b border-white/5 pb-2">Live EA Execution Feed</div>
+                    <button id="start-btn" onclick="toggleEA()" class="w-full py-4 bg-dash-border/30 hover:bg-dash-border/60 border border-dash-cyan/50 rounded-lg font-mono font-bold text-dash-cyan glow-cyan transition-all uppercase tracking-[0.15em] relative overflow-hidden">
+                        <span id="btn-text" class="relative z-10">INITIATE AI ENGINE</span>
+                    </button>
+                    <div class="flex justify-between items-center mt-4 font-mono text-xs">
+                        <span class="text-dash-text uppercase tracking-widest">System Status:</span>
+                        <span id="ea-status-text" class="text-dash-text uppercase tracking-widest">STANDBY</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STRATEGY TESTER PANEL (Hidden by default) -->
+            <div id="panel-tester" class="glass-panel p-4 rounded-xl flex-col gap-3 flex-shrink-0 hidden">
+                <div class="flex justify-between items-center border-b border-white/5 pb-2">
+                    <span class="font-mono text-[10px] text-dash-cyan uppercase tracking-[0.2em]">Strategy Tester Config (MT5 Style)</span>
+                    <span id="tester-tf-badge" class="font-mono text-[9px] bg-dash-border px-1.5 py-0.5 rounded text-dash-text">M15 / XAUUSD</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 font-mono text-xs">
+                    <div class="col-span-2 grid grid-cols-2 gap-2 bg-dash-bg/50 p-2 rounded border border-dash-border">
+                        <div>
+                            <label class="text-[9px] text-dash-text block mb-1">From Date</label>
+                            <input type="date" id="test-date-from" value="2025-01-01" class="w-full bg-dash-bg border border-dash-border rounded p-1 text-white text-[10px]">
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-dash-text block mb-1">To Date</label>
+                            <input type="date" id="test-date-to" value="2026-06-01" class="w-full bg-dash-bg border border-dash-border rounded p-1 text-white text-[10px]">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-dash-text">Lot Size</label>
+                        <input type="number" id="test-lot" value="0.10" step="0.01" class="w-full bg-dash-bg border border-dash-border rounded p-1.5 text-white">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-dash-text">Strategy Mode</label>
+                        <select id="test-strat" class="w-full bg-dash-bg border border-dash-border rounded p-1.5 text-white text-[11px]">
+                            <option>Neural Scalper v3</option>
+                            <option>Breakout Momentum</option>
+                            <option>Grid Hedging AI</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-dash-text">Take Profit (Pips)</label>
+                        <input type="number" id="test-tp" value="45" class="w-full bg-dash-bg border border-dash-border rounded p-1.5 text-white">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-dash-text">Stop Loss (Pips)</label>
+                        <input type="number" id="test-sl" value="20" class="w-full bg-dash-bg border border-dash-border rounded p-1.5 text-white">
+                    </div>
+                </div>
+                <button onclick="runBacktest()" id="btn-backtest" class="w-full mt-1 py-3 bg-dash-cyan/20 hover:bg-dash-cyan/30 border border-dash-cyan rounded-lg font-mono font-bold text-dash-cyan transition-all uppercase tracking-widest text-xs">
+                    START BACKTEST SIMULATION
+                </button>
+                <div id="backtest-progress-box" class="hidden flex flex-col gap-1 mt-1 font-mono text-[10px]">
+                    <div class="flex justify-between text-dash-text">
+                        <span id="bt-status-label">Testing data...</span>
+                        <span id="bt-pct">0%</span>
+                    </div>
+                    <div class="w-full bg-dash-border rounded-full h-1.5 overflow-hidden">
+                        <div id="bt-bar" class="bg-dash-cyan h-full transition-all duration-200" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Financial Metrics -->
+            <div class="glass-panel p-4 rounded-xl grid grid-cols-2 gap-3 flex-shrink-0">
+                <div>
+                    <div class="text-[10px] font-mono text-dash-text uppercase tracking-widest" id="lbl-equity-title">Total Equity</div>
+                    <div class="text-lg font-bold font-mono text-white mt-0.5" id="val-equity">$10,450.00</div>
+                </div>
+                <div>
+                    <div class="text-[10px] font-mono text-dash-text uppercase tracking-widest">Floating P/L</div>
+                    <div class="text-lg font-bold font-mono text-dash-text mt-0.5" id="val-pnl">$0.00</div>
+                </div>
+                <div>
+                    <div class="text-[10px] font-mono text-dash-text uppercase tracking-widest">Win Rate</div>
+                    <div class="text-xl font-bold font-mono text-dash-cyan mt-0.5" id="val-wr">0.0%</div>
+                </div>
+                <div>
+                    <div class="text-[10px] font-mono text-dash-text uppercase tracking-widest">Total Trades</div>
+                    <div class="text-sm font-bold font-mono text-dash-text mt-1.5" id="val-trades">(0 TRADES)</div>
+                </div>
+            </div>
+
+            <!-- Terminal Execution Log -->
+            <div class="glass-panel p-4 rounded-xl flex-1 flex flex-col min-h-[160px]">
+                <div class="flex justify-between items-center mb-2 flex-shrink-0">
+                    <span class="font-mono text-[10px] text-dash-cyan uppercase tracking-[0.2em]">Execution Terminal</span>
+                    <span class="w-1.5 h-1.5 rounded-full bg-dash-cyan animate-ping"></span>
+                </div>
+                <div id="terminal-log" class="flex-1 overflow-y-auto terminal-scroll font-mono text-[11px] text-dash-text flex flex-col gap-1 pr-1">
+                    <div class="text-dash-cyan/70">[16:00:01] System initialized successfully. Awaiting command...</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT PANEL: 3D AI Core & Candlestick Chart -->
+        <div class="lg:col-span-9 flex flex-col gap-2 min-h-0">
+            
+            <!-- 3D AI Core Container -->
+            <div class="glass-panel rounded-lg flex-1 relative overflow-hidden flex items-center justify-center min-h-[260px]" id="canvas-container">
+                <div class="absolute top-4 left-4 z-10 flex flex-col gap-1 pointer-events-none">
+                    <span class="font-mono text-xs px-2 py-1 rounded bg-black/50 border border-dash-border text-dash-cyan uppercase tracking-widest backdrop-blur-sm" id="robot-status-badge">
+                        STATE: IDLE
+                    </span>
+                    <span class="font-mono text-[10px] text-dash-text/50">DRAG TO ROTATE 3D CHIP PIPELINE</span>
+                </div>
+            </div>
+
+            <!-- Candlestick Chart Container -->
+            <div class="glass-panel rounded-lg flex-1 relative p-1 flex flex-col min-h-[260px]">
+                <div class="absolute top-3 left-4 z-10 pointer-events-none flex items-center gap-3">
+                    <h2 class="font-bold text-lg flex items-center gap-2">
+                        XAUUSD <span id="chart-tf-label" class="font-mono text-xs bg-dash-border text-dash-cyan px-1.5 py-0.5 rounded">M15 Live Feed</span>
+                    </h2>
+                </div>
+                <div class="absolute top-3 right-4 z-10 pointer-events-none">
+                    <div class="font-mono font-bold text-xl text-white" id="live-price">2024.50</div>
+                </div>
+                <div id="tv-chart" class="flex-1 w-full h-full mt-8"></div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        /* =========================================
+           1. THREE.JS AI CORE (3-CPU Pipeline)
+           ========================================= */
+        let scene, camera, renderer, aiGroup;
+        let chipScanning, chipAnalyzing, chipEntry;
+        let dataParticles = [];
+        let dataBuses = [];
+        
+        let colorCyan = 0x00E5FF;
+        let colorBlue = 0x2979FF;
+        let colorYellow = 0xFFEA00;
+        let colorGreen = 0x00E676;
+        let colorIdle = 0x0B111A;
+        let currentColor = colorCyan;
+
+        let isAIActive = false;
+        let aiState = 'IDLE';
+        const clock = new THREE.Clock();
+
+        function createChip(x, z, labelText) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+
+            const baseGeo = new THREE.BoxGeometry(1.8, 0.15, 1.8);
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x050810, roughness: 0.2, metalness: 0.9 });
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            group.add(base);
+
+            const coreGeo = new THREE.BoxGeometry(0.8, 0.25, 0.8);
+            const coreMat = new THREE.MeshStandardMaterial({ 
+                color: 0x000000, emissive: colorCyan, emissiveIntensity: 0.1,
+                roughness: 0.1, metalness: 1.0, transparent: true, opacity: 0.85
+            });
+            const core = new THREE.Mesh(coreGeo, coreMat);
+            core.position.y = 0.12; 
+            group.add(core);
+
+            const circuitGeo = new THREE.PlaneGeometry(0.6, 0.6);
+            const circuitMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
+            const circuit = new THREE.Mesh(circuitGeo, circuitMat);
+            circuit.rotation.x = -Math.PI / 2;
+            circuit.position.y = 0.15;
+            group.add(circuit);
+
+            const pinMat = new THREE.MeshStandardMaterial({ color: 0xFFD700, metalness: 1.0, roughness: 0.15 });
+            const pinGeo = new THREE.BoxGeometry(0.04, 0.03, 0.25);
+            
+            const pinCount = 10;
+            const step = 1.4 / (pinCount - 1);
+            for(let i=0; i<pinCount; i++) {
+                let offset = -0.7 + (i * step);
+                let pinT = new THREE.Mesh(pinGeo, pinMat); pinT.position.set(offset, 0, -0.95); group.add(pinT);
+                let pinB = new THREE.Mesh(pinGeo, pinMat); pinB.position.set(offset, 0, 0.95); group.add(pinB);
+                let pinL = new THREE.Mesh(pinGeo, pinMat); pinL.rotation.y = Math.PI/2; pinL.position.set(-0.95, 0, offset); group.add(pinL);
+                let pinR = new THREE.Mesh(pinGeo, pinMat); pinR.rotation.y = Math.PI/2; pinR.position.set(0.95, 0, offset); group.add(pinR);
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#050810'; ctx.fillRect(0,0,256,64);
+            ctx.fillStyle = '#00E5FF'; ctx.font = 'bold 42px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(labelText, 128, 32);
+            
+            const tex = new THREE.CanvasTexture(canvas);
+            const labelGeo = new THREE.PlaneGeometry(1.2, 0.3);
+            const labelMat = new THREE.MeshBasicMaterial({ map: tex });
+            const labelMesh = new THREE.Mesh(labelGeo, labelMat);
+            labelMesh.rotation.x = -Math.PI/2;
+            labelMesh.position.set(0, 0.08, 0.6);
+            group.add(labelMesh);
+
+            return { group, core, coreMat, circuitMat };
+        }
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            if (!container) return;
+            
+            scene = new THREE.Scene();
+            
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+            camera.position.set(0, 5, 7.5);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.1;
+            container.appendChild(renderer.domElement);
+
+            const ambient = new THREE.AmbientLight(0xffffff, 0.3);
+            scene.add(ambient);
+            
+            const spotLight = new THREE.SpotLight(0xffffff, 2.5);
+            spotLight.position.set(0, 8, 3);
+            spotLight.angle = Math.PI / 3;
+            spotLight.penumbra = 0.5;
+            scene.add(spotLight);
+
+            aiGroup = new THREE.Group();
+
+            chipScanning = createChip(-2.4, 0, '[1] SCAN');
+            chipAnalyzing = createChip(0, 0, '[2] ANALYZE');
+            chipEntry = createChip(2.4, 0, '[3] EXECUTE');
+
+            aiGroup.add(chipScanning.group);
+            aiGroup.add(chipAnalyzing.group);
+            aiGroup.add(chipEntry.group);
+
+            chipScanning.light = new THREE.PointLight(colorBlue, 0, 3.5); 
+            chipScanning.light.position.set(-2.4, 0.5, 0); aiGroup.add(chipScanning.light);
+
+            chipAnalyzing.light = new THREE.PointLight(colorYellow, 0, 3.5); 
+            chipAnalyzing.light.position.set(0, 0.5, 0); aiGroup.add(chipAnalyzing.light);
+
+            chipEntry.light = new THREE.PointLight(colorGreen, 0, 3.5); 
+            chipEntry.light.position.set(2.4, 0.5, 0); aiGroup.add(chipEntry.light);
+
+            const busGeo = new THREE.CylinderGeometry(0.03, 0.03, 4.8);
+            const busMat = new THREE.MeshStandardMaterial({ 
+                color: 0x111111, emissive: colorCyan, emissiveIntensity: 0.1, metalness: 0.8, roughness: 0.2 
+            });
+            
+            for(let z of [-0.3, 0, 0.3]) {
+                let bus = new THREE.Mesh(busGeo, busMat);
+                bus.rotation.z = Math.PI / 2;
+                bus.position.set(0, -0.05, z);
+                aiGroup.add(bus);
+                dataBuses.push(busMat); 
+            }
+
+            const partGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+            const partMat = new THREE.MeshBasicMaterial({ color: colorCyan });
+            
+            for(let i=0; i<25; i++) {
+                let particle = new THREE.Mesh(partGeo, partMat);
+                particle.userData = {
+                    x: -3.8 + Math.random() * 7.6,
+                    z: (Math.random() - 0.5) * 1.0,
+                    speed: 0.015 + Math.random() * 0.02
+                };
+                particle.position.set(particle.userData.x, 0.2, particle.userData.z);
+                aiGroup.add(particle);
+                dataParticles.push(particle);
+            }
+
+            aiGroup.rotation.x = Math.PI / 7;
+            aiGroup.rotation.y = -Math.PI / 6;
+            scene.add(aiGroup);
+
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+            container.addEventListener('mousedown', () => { isDragging = true; });
+            container.addEventListener('mouseup', () => { isDragging = false; });
+            container.addEventListener('mouseleave', () => { isDragging = false; });
+            container.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const deltaMove = { x: e.offsetX - previousMousePosition.x, y: e.offsetY - previousMousePosition.y };
+                    aiGroup.rotation.y += deltaMove.x * 0.01;
+                    aiGroup.rotation.x += deltaMove.y * 0.01;
+                }
+                previousMousePosition = { x: e.offsetX, y: e.offsetY };
+            });
+
+            window.addEventListener('resize', () => {
+                if (!container) return;
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            });
+
+            animate3D();
+        }
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+            const time = clock.getElapsedTime();
+
+            let sColor = colorIdle, aColor = colorIdle, eColor = colorIdle;
+            let sInt = 0.1, aInt = 0.1, eInt = 0.1;
+            let pSpeedMult = 1.0;
+            let activeColor = colorCyan;
+
+            if (aiState === 'SCANNING') {
+                sColor = colorBlue; activeColor = colorBlue;
+                sInt = 1.5 + Math.sin(time * 12) * 1.0;
+                pSpeedMult = 2.0;
+            } else if (aiState === 'ANALYZING') {
+                aColor = colorYellow; activeColor = colorYellow;
+                aInt = 2.0 + Math.sin(time * 25) * 1.5;
+                pSpeedMult = 4.0;
+            } else if (aiState === 'ENTRY') {
+                eColor = colorGreen; activeColor = colorGreen;
+                eInt = 4.0;
+                pSpeedMult = 6.0;
+            }
+
+            if (chipScanning) {
+                chipScanning.coreMat.emissive.lerp(new THREE.Color(sColor), 0.1);
+                chipScanning.coreMat.emissiveIntensity = THREE.MathUtils.lerp(chipScanning.coreMat.emissiveIntensity, sInt, 0.1);
+                chipScanning.circuitMat.color.lerp(new THREE.Color(sColor), 0.1);
+                chipScanning.light.intensity = chipScanning.coreMat.emissiveIntensity * 1.5;
+                chipScanning.light.color.lerp(new THREE.Color(sColor), 0.1);
+            }
+
+            if (chipAnalyzing) {
+                chipAnalyzing.coreMat.emissive.lerp(new THREE.Color(aColor), 0.1);
+                chipAnalyzing.coreMat.emissiveIntensity = THREE.MathUtils.lerp(chipAnalyzing.coreMat.emissiveIntensity, aInt, 0.1);
+                chipAnalyzing.circuitMat.color.lerp(new THREE.Color(aColor), 0.1);
+                chipAnalyzing.light.intensity = chipAnalyzing.coreMat.emissiveIntensity * 1.5;
+                chipAnalyzing.light.color.lerp(new THREE.Color(aColor), 0.1);
+            }
+
+            if (chipEntry) {
+                chipEntry.coreMat.emissive.lerp(new THREE.Color(eColor), 0.1);
+                chipEntry.coreMat.emissiveIntensity = THREE.MathUtils.lerp(chipEntry.coreMat.emissiveIntensity, eInt, 0.1);
+                chipEntry.circuitMat.color.lerp(new THREE.Color(eColor), 0.1);
+                chipEntry.light.intensity = chipEntry.coreMat.emissiveIntensity * 1.5;
+                chipEntry.light.color.lerp(new THREE.Color(eColor), 0.1);
+            }
+
+            dataBuses.forEach((busMat, idx) => {
+                busMat.emissive.lerp(new THREE.Color(activeColor), 0.05);
+                busMat.emissiveIntensity = 0.2 + Math.sin(time * 5 + idx) * 0.3;
+            });
+
+            dataParticles.forEach((p, i) => {
+                p.userData.x += p.userData.speed * pSpeedMult;
+                if (p.userData.x > 3.8) { p.userData.x = -3.8; }
+                p.position.x = p.userData.x;
+                p.position.y = 0.15 + Math.sin(p.userData.x * 4 + time * 3 + i) * 0.08;
+                p.rotation.x += 0.05 * pSpeedMult;
+                p.rotation.y += 0.05 * pSpeedMult;
+                p.material.color.lerp(new THREE.Color(activeColor), 0.1);
+            });
+
+            if (aiState === 'IDLE') {
+                aiGroup.rotation.y += 0.001;
+            } else {
+                aiGroup.rotation.y += 0.001 + Math.sin(time * pSpeedMult) * 0.001;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        /* =========================================
+           2. LIGHTWEIGHT CHARTS (Candlestick)
+           ========================================= */
+        let tvChart, candleSeries;
+        let currentCandle;
+        let lastClose = 2024.50;
+        let simulatedTickInterval;
+        
+        function initChart() {
+            const container = document.getElementById('tv-chart');
+            if (!container) return;
+
+            const chartOptions = { 
+                layout: { textColor: '#8B9BBA', background: { type: 'solid', color: 'transparent' } }, 
+                grid: { vertLines: { color: '#1E2C41' }, horzLines: { color: '#1E2C41' } },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                rightPriceScale: { borderColor: '#1E2C41' },
+                timeScale: { borderColor: '#1E2C41', timeVisible: true, secondsVisible: true }
+            };
+            
+            tvChart = LightweightCharts.createChart(container, chartOptions);
+            candleSeries = tvChart.addSeries(LightweightCharts.CandlestickSeries, {
+                upColor: '#00E676', downColor: '#FF1744', borderVisible: false,
+                wickUpColor: '#00E676', wickDownColor: '#FF1744'
+            });
+
+            const historicalData = [];
+            let time = Math.floor(Date.now() / 1000) - 3600;
+            
+            for(let i = 0; i < 60; i++) {
+                let open = lastClose;
+                let close = open + (Math.random() - 0.5) * 5;
+                let high = Math.max(open, close) + Math.random() * 2;
+                let low = Math.min(open, close) - Math.random() * 2;
+                historicalData.push({ time: time, open, high, low, close });
+                lastClose = close;
+                time += 60;
+            }
+            
+            candleSeries.setData(historicalData);
+            
+            currentCandle = {
+                time: Math.floor(Date.now() / 1000),
+                open: lastClose, high: lastClose, low: lastClose, close: lastClose
+            };
+            
+            simulatedTickInterval = setInterval(updateTickData, 500);
+
+            new ResizeObserver(entries => {
+                if (entries.length === 0 || entries[0].target !== container) { return; }
+                const newRect = entries[0].contentRect;
+                tvChart.applyOptions({ height: newRect.height, width: newRect.width });
+            }).observe(container);
+        }
+
+        function updateTickData() {
+            const now = Math.floor(Date.now() / 1000);
+            const volatility = isAIActive ? 1.5 : 0.5;
+            const tick = (Math.random() - 0.5) * volatility;
+            const currentPrice = currentCandle.close + tick;
+
+            if (now % 5 === 0 && currentCandle.time !== now) {
+                currentCandle = { time: now, open: currentPrice, high: currentPrice, low: currentPrice, close: currentPrice };
+            } else {
+                currentCandle.close = currentPrice;
+                currentCandle.high = Math.max(currentCandle.high, currentPrice);
+                currentCandle.low = Math.min(currentCandle.low, currentPrice);
+            }
+
+            candleSeries.update(currentCandle);
+            const priceEl = document.getElementById('live-price');
+            if (priceEl) {
+                priceEl.innerText = currentPrice.toFixed(2);
+                priceEl.style.color = tick >= 0 ? '#00E676' : '#FF1744';
+            }
+
+            if(tradeOpen) fluctuatePnL(tick);
+        }
+
+        /* =========================================
+           3. EA & STRATEGY TESTER LOGIC
+           ========================================= */
+        let activeTab = 'live';
+        let eaSequenceTimeout;
+        let tradeOpen = false;
+        let currentPnl = 0.0;
+        let isBuyOrder = true;
+        let totalTrades = 0;
+        let winningTrades = 0;
+
+        function changeTimeframe(tf) {
+            document.getElementById('chart-tf-label').innerText = `${tf} Live Feed`;
+            document.getElementById('tester-tf-badge').innerText = `${tf} / XAUUSD`;
+            logTerminal(`Timeframe changed to ${tf}. Re-syncing price tick intervals...`, "text-dash-cyan");
+        }
+
+        function switchTab(tab) {
+            activeTab = tab;
+            const livePanel = document.getElementById('panel-live');
+            const testerPanel = document.getElementById('panel-tester');
+            const tabLive = document.getElementById('tab-live');
+            const tabTester = document.getElementById('tab-tester');
+            const headerMode = document.getElementById('header-mode');
+            const equityTitle = document.getElementById('lbl-equity-title');
+
+            if (tab === 'live') {
+                livePanel.classList.remove('hidden');
+                testerPanel.classList.add('hidden');
+                tabLive.className = "flex-1 py-2 rounded-lg bg-dash-cyan/20 text-dash-cyan font-bold transition-all";
+                tabTester.className = "flex-1 py-2 rounded-lg text-dash-text hover:text-white transition-all";
+                headerMode.innerText = "LIVE EA SYNC";
+                equityTitle.innerText = "Total Equity";
+                logTerminal("Switched to Live EA Sync mode.", "text-dash-cyan");
+                if(isAIActive) updateAIState('MONITORING', 'text-dash-cyan', colorCyan);
+            } else {
+                livePanel.classList.add('hidden');
+                testerPanel.classList.remove('hidden');
+                testerPanel.style.display = 'flex';
+                tabTester.className = "flex-1 py-2 rounded-lg bg-dash-cyan/20 text-dash-cyan font-bold transition-all";
+                tabLive.className = "flex-1 py-2 rounded-lg text-dash-text hover:text-white transition-all";
+                headerMode.innerText = "STRATEGY TESTER";
+                equityTitle.innerText = "Backtest Final Balance";
+                logTerminal("Switched to Strategy Tester mode.", "text-dash-cyan");
+                if(isAIActive) toggleEA(); 
+            }
+        }
+
+        function logTerminal(msg, colorClass = "text-dash-text") {
+            const term = document.getElementById('terminal-log');
+            if (!term) return;
+            const time = new Date().toLocaleTimeString('en-US', {hour12: false, hour: "numeric", minute: "numeric", second: "numeric"});
+            const line = document.createElement('div');
+            line.className = `mb-1 ${colorClass}`;
+            line.innerHTML = `<span class="text-gray-500">[${time}]</span> ${msg}`;
+            term.appendChild(line);
+            term.scrollTop = term.scrollHeight;
+        }
+
+        function updateAIState(state, uiColorClass, hexColor) {
+            aiState = state;
+            currentColor = hexColor;
+            const badge = document.getElementById('robot-status-badge');
+            if (badge) {
+                badge.innerText = `STATE: ${state}`;
+                badge.className = `font-mono text-xs px-2 py-1 rounded bg-black/50 border backdrop-blur-sm uppercase tracking-widest ${uiColorClass.replace('text', 'border')} ${uiColorClass}`;
+            }
+        }
+
+        function toggleEA() {
+            const btn = document.getElementById('start-btn');
+            const statusText = document.getElementById('ea-status-text');
+
+            if (!isAIActive) {
+                isAIActive = true;
+                btn.innerHTML = `<span class="relative z-10 text-white">TERMINATE PROCESS</span>`;
+                btn.className = "w-full py-4 bg-dash-red/20 border border-dash-red hover:bg-dash-red/40 rounded-lg font-mono font-bold glow-red transition-all uppercase tracking-widest relative overflow-hidden";
+                statusText.innerText = "ONLINE - ALGORITHMIC MODE";
+                statusText.className = "text-dash-cyan animate-pulse font-bold";
+                logTerminal("AI Engine initialized. Syncing data structures...", "text-dash-cyan font-bold");
+                startEASequence();
+            } else {
+                isAIActive = false;
+                clearTimeout(eaSequenceTimeout);
+                if (tradeOpen) closeTrade();
+                btn.innerHTML = `<span class="relative z-10">INITIATE AI ENGINE</span>`;
+                btn.className = "w-full py-4 bg-dash-border hover:bg-opacity-80 border border-dash-cyan rounded-lg font-mono font-bold text-dash-cyan glow-cyan transition-all uppercase tracking-widest relative overflow-hidden";
+                statusText.innerText = "STANDBY";
+                statusText.className = "text-dash-text";
+                updateAIState('IDLE', 'text-dash-cyan', colorCyan);
+                logTerminal("Process terminated manually.", "text-dash-red");
+            }
+        }
+
+        function startEASequence() {
+            if(!isAIActive) return;
+            updateAIState('SCANNING', 'text-dash-blue', colorBlue);
+            logTerminal("Scanning market volume & liquidity nodes...");
+
+            eaSequenceTimeout = setTimeout(() => {
+                if(!isAIActive) return;
+                updateAIState('ANALYZING', 'text-dash-yellow', colorYellow);
+                logTerminal("Anomalous volume detected. Running predictive models...", "text-dash-yellow");
+
+                eaSequenceTimeout = setTimeout(() => {
+                    if(!isAIActive) return;
+                    updateAIState('ENTRY', 'text-dash-green', colorGreen);
+                    isBuyOrder = Math.random() > 0.5;
+                    logTerminal(`[EXECUTE] ${isBuyOrder ? 'BUY' : 'SELL'} 1.00 LOT @ ${currentCandle.close.toFixed(2)}`, "text-dash-green font-bold text-sm");
+                    openTrade();
+
+                    eaSequenceTimeout = setTimeout(() => {
+                        if(!isAIActive) return;
+                        updateAIState('MONITORING', 'text-dash-cyan', colorCyan);
+                        logTerminal("Trade active. Monitoring trajectory...");
+                        
+                        eaSequenceTimeout = setTimeout(() => {
+                            if(!isAIActive) return;
+                            closeTrade();
+                            eaSequenceTimeout = setTimeout(startEASequence, 3000);
+                        }, Math.random() * 6000 + 3000);
+
+                    }, 2000);
+                }, 3000);
+            }, 2500);
+        }
+
+        function openTrade() {
+            tradeOpen = true;
+            currentPnl = -2.50;
+            updatePnLDisplay();
+        }
+
+        function fluctuatePnL(tickDiff) {
+            const multiplier = 50;
+            const move = isBuyOrder ? tickDiff * multiplier : -tickDiff * multiplier;
+            currentPnl += move;
+            updatePnLDisplay();
+        }
+
+        function updatePnLDisplay() {
+            const pnlEl = document.getElementById('val-pnl');
+            if (!pnlEl) return;
+            pnlEl.innerText = (currentPnl >= 0 ? "+$" : "-$") + Math.abs(currentPnl).toFixed(2);
+            pnlEl.className = currentPnl >= 0 ? "text-lg font-bold font-mono text-dash-green glow-green" : "text-lg font-bold font-mono text-dash-red";
+        }
+
+        function closeTrade() {
+            if(!tradeOpen) return;
+            tradeOpen = false;
+            logTerminal(`[CLOSED] P/L: ${currentPnl >= 0 ? '+' : '-'}$${Math.abs(currentPnl).toFixed(2)}`, currentPnl >= 0 ? "text-dash-green" : "text-dash-red");
+            
+            totalTrades++;
+            if (currentPnl > 0) winningTrades++;
+            
+            const winRatePercent = ((winningTrades / totalTrades) * 100).toFixed(1);
+            document.getElementById('val-trades').innerText = `(${totalTrades} TRADES)`;
+            const wrEl = document.getElementById('val-wr');
+            wrEl.innerText = `${winRatePercent}%`;
+            wrEl.className = winRatePercent >= 70 ? "text-xl font-bold font-mono text-dash-green glow-green" : winRatePercent >= 40 ? "text-xl font-bold font-mono text-dash-yellow glow-yellow" : "text-xl font-bold font-mono text-dash-red glow-red";
+            
+            let eqEl = document.getElementById('val-equity');
+            let eqStr = eqEl.innerText.replace('$', '').replace(',', '');
+            let eq = parseFloat(eqStr) + currentPnl;
+            eqEl.innerText = "$" + eq.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            
+            currentPnl = 0;
+            document.getElementById('val-pnl').innerText = "$0.00";
+            document.getElementById('val-pnl').className = "text-lg font-bold font-mono text-dash-text";
+        }
+
+        function runBacktest() {
+            const lot = document.getElementById('test-lot').value;
+            const strat = document.getElementById('test-strat').value;
+            const tp = document.getElementById('test-tp').value;
+            const sl = document.getElementById('test-sl').value;
+            const dateFrom = document.getElementById('test-date-from').value;
+            const dateTo = document.getElementById('test-date-to').value;
+            const tf = document.getElementById('global-timeframe').value;
+
+            const progressBox = document.getElementById('backtest-progress-box');
+            const progressBar = document.getElementById('bt-bar');
+            const statusLabel = document.getElementById('bt-status-label');
+            const pctLabel = document.getElementById('bt-pct');
+            const btn = document.getElementById('btn-backtest');
+
+            progressBox.classList.remove('hidden');
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+            logTerminal(`[BACKTEST] Initializing ${strat} on [TF: ${tf}] (${dateFrom} to ${dateTo}) | Lot: ${lot}, TP: ${tp}p, SL: ${sl}p`, "text-dash-cyan font-bold");
+
+            let progress = 0;
+            updateAIState('ANALYZING', 'text-dash-yellow', colorYellow);
+
+            const interval = setInterval(() => {
+                progress += 10;
+                progressBar.style.width = progress + '%';
+                pctLabel.innerText = progress + '%';
+
+                if(progress === 30) {
+                    statusLabel.innerText = `Fetching historical data (${dateFrom} -> ${dateTo})...`;
+                    updateAIState('SCANNING', 'text-dash-blue', colorBlue);
+                } else if(progress === 70) {
+                    statusLabel.innerText = "Processing tick data & calculating equity curve...";
+                    updateAIState('ENTRY', 'text-dash-green', colorGreen);
+                }
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50');
+                    statusLabel.innerText = "Backtest completed successfully!";
+                    updateAIState('IDLE', 'text-dash-cyan', colorCyan);
+
+                    const simulatedProfit = (Math.random() * 1850 + 650).toFixed(2);
+                    const simulatedWR = (Math.random() * 22 + 70).toFixed(1);
+                    const simulatedTradesCount = Math.floor(Math.random() * 60 + 120);
+
+                    document.getElementById('val-equity').innerText = `$${(10000 + parseFloat(simulatedProfit)).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+                    document.getElementById('val-pnl').innerText = `+$${simulatedProfit}`;
+                    document.getElementById('val-pnl').className = "text-lg font-bold font-mono text-dash-green glow-green";
+                    document.getElementById('val-wr').innerText = `${simulatedWR}%`;
+                    document.getElementById('val-wr').className = "text-xl font-bold font-mono text-dash-green glow-green";
+                    document.getElementById('val-trades').innerText = `(${simulatedTradesCount} TRADES)`;
+
+                    logTerminal(`[RESULT] TF: ${tf} | Period: ${dateFrom} to ${dateTo} | Net Profit: +$${simulatedProfit} | Win Rate: ${simulatedWR}%`, "text-dash-green font-bold");
+                }
+            }, 300);
+        }
+
+        window.onload = () => {
+            init3D();
+            initChart();
+        };
+    </script>
+</body>
+</html>
