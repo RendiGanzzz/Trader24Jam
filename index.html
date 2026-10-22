@@ -802,6 +802,27 @@
             init3D();
             initChart();
         };
+    <!-- Script Integrasi Real-Time MT5 ke Dashboard -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        // Menghubungkan dashboard ke server Python via Cloudflare Tunnel Anda
+        const socket = io("https://arthur-cio-pichunter-style.trycloudflare.com");
+
+        socket.on('connect', function() {
+            console.log("Berhasil terhubung ke Server Jembatan MT5!");
+        });
+
+        socket.on('market_update', function(data) {
+            console.h("Data dari MT5 diterima:", data);
+            
+            // Contoh otomatis memperbarui elemen harga atau status jika ada di HTML Anda
+            if(document.getElementById("live-price")) {
+                document.getElementById("live-price").innerText = data.price;
+            }
+            if(document.getElementById("bot-status")) {
+                document.getElementById("bot-status").innerText = data.status;
+            }
+        });
     </script>
 </body>
 </html>
