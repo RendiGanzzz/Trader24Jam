@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zyphora EA - Live AI Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Three.js (Untuk Efek 3D AI Core) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- TradingView Lightweight Charts -->
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+
+    <!-- Socket.io (Untuk menerima data real-time) -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            dark: '#050B14',
+                            panel: '#0A1324',
+                            border: '#1E2D4A',
+                            cyan: '#00F0FF',
+                            green: '#00FF66',
+                            red: '#FF003C',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #050B14;
+            color: #E2E8F0;
+        }
+        .glass-panel {
+            background: rgba(10, 19, 36, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(30, 45, 74, 0.8);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+        .glow-cyan {
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
+        }
+        .glow-green {
+            text-shadow: 0 0 10px rgba(0, 255, 102, 0.7);
+        }
+        .glow-red {
+            text-shadow: 0 0 10px rgba(255, 0, 60, 0.7);
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1E2D4A; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00F0FF; }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <header class="h-16 glass-panel border-b-brand-border flex items-center justify-between px-4 sm:px-6 lg:px-8 z-50 sticky top-0">
+        <div class="flex items-center gap-4">
+            <div class="w-10 h-10 rounded-lg bg-brand-border flex items-center justify-center border border-brand-cyan/30 shadow-[0_0_15px_rgba(0,240,255,0.2)]">
+                <svg class="w-6 h-6 text-brand-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg tracking-wider text-white">ZYPHORA <span class="text-brand-cyan font-mono text-sm ml-1 glow-cyan">v2.6</span></h1>
+                <p class="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Ren Smart Trend Master</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <div id="conn-indicator" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-900/30 border border-red-500/50">
+                <span id="conn-dot" class="w-2.5 h-2.5 rounded-full bg-brand-red animate-pulse"></span>
+                <span id="conn-text" class="text-xs font-mono font-bold text-brand-red">DISCONNECTED</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
+        
+        <!-- Kiri: Telemetry & Controls (4 columns) -->
+        <div class="lg:col-span-4 flex flex-col gap-6">
+            
+            <!-- Main Stats -->
+            <div class="glass-panel rounded-2xl p-5 flex flex-col gap-4">
+                <div class="flex justify-between items-center border-b border-brand-border pb-3">
+                    <h2 class="text-xs font-mono text-brand-cyan uppercase tracking-[0.2em]">Live Telemetry</h2>
+                    <span id="bot-status" class="text-[10px] px-2 py-0.5 rounded bg-brand-border text-slate-300 font-mono border border-slate-600">STANDBY</span>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-brand-dark rounded-xl p-4 border border-brand-border/50">
+                        <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Bid Price</p>
+                        <p id="live-price" class="text-xl sm:text-2xl font-bold font-mono text-white">0.00</p>
+                    </div>
+                    <div class="bg-brand-dark rounded-xl p-4 border border-brand-border/50">
+                        <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Floating PnL</p>
+                        <p id="live-pnl" class="text-xl sm:text-2xl font-bold font-mono text-slate-400">$0.00</p>
+                    </div>
+                </div>
+
+                <div class="bg-brand-dark rounded-xl p-4 border border-brand-border/50">
+                    <div class="flex justify-between items-center mb-2">
+                        <p class="text-[10px] text-slate-400 font-mono uppercase">Daily Target Progress</p>
+                        <p class="text-[10px] text-brand-cyan font-mono" id="target-pct">0%</p>
+                    </div>
+                    <div class="w-full bg-brand-panel rounded-full h-2 overflow-hidden border border-brand-border">
+                        <div id="target-bar" class="bg-brand-cyan h-full transition-all duration-500 shadow-[0_0_10px_#00F0FF]" style="width: 0%"></div>
+                    </div>
+                    <p class="text-right text-[9px] text-slate-500 font-mono mt-1">Target: $50.00</p>
+                </div>
+            </div>
+
+            <!-- Log Terminal -->
+            <div class="glass-panel rounded-2xl p-5 flex-1 flex flex-col min-h-[250px]">
+                <h2 class="text-xs font-mono text-brand-cyan uppercase tracking-[0.2em] border-b border-brand-border pb-3 mb-3">System Log</h2>
+                <div id="terminal-log" class="flex-1 overflow-y-auto font-mono text-[11px] text-slate-300 space-y-1.5 pr-2">
+                    <div class="text-brand-cyan/70">Init Zyphora Engine v2.6...</div>
+                    <div class="text-slate-500">Connecting to MT5 Bridge...</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Kanan: 3D Visualizer & Chart (8 columns) -->
+        <div class="lg:col-span-8 flex flex-col gap-6">
+            
+            <!-- 3D Viewport -->
+            <div class="glass-panel rounded-2xl relative overflow-hidden h-[250px] sm:h-[300px] border border-brand-cyan/20">
+                <div id="canvas-3d" class="absolute inset-0"></div>
+                
+                <!-- Overlay UI on 3D -->
+                <div class="absolute top-4 left-4 z-10 pointer-events-none">
+                    <div class="px-3 py-1 bg-black/50 backdrop-blur border border-brand-cyan/30 rounded text-[10px] font-mono text-brand-cyan tracking-widest uppercase">
+                        AI Neural Process
+                    </div>
+                </div>
+                <div class="absolute bottom-4 right-4 z-10 pointer-events-none flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-brand-cyan animate-ping"></span>
+                    <span class="text-[9px] font-mono text-brand-cyan/70 tracking-widest">PROCESSING</span>
+                </div>
+            </div>
+
+            <!-- TradingView Chart -->
+            <div class="glass-panel rounded-2xl p-4 flex-1 min-h-[300px] flex flex-col">
+                <div class="flex justify-between items-center mb-2 pointer-events-none">
+                    <h2 class="text-xs font-mono text-slate-400 uppercase tracking-[0.2em]">Market Action (Simulated Feed)</h2>
+                    <span class="text-[10px] text-brand-cyan font-mono bg-brand-cyan/10 px-2 py-0.5 rounded border border-brand-cyan/20">XAUUSD M15</span>
+                </div>
+                <div id="tv-chart" class="w-full flex-1"></div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <footer class="mt-auto border-t border-brand-border bg-brand-dark py-4 text-center">
+        <p class="text-xs font-mono text-slate-600">Zyphora EA Bridge Connection - &copy; 2026</p>
+    </footer>
+
+    <!-- APP LOGIC -->
+    <script>
+        // ---------------------------------------------------
+        // 1. UTILITY: Terminal Logger
+        // ---------------------------------------------------
+        function logMsg(msg, type = 'info') {
+            const terminal = document.getElementById('terminal-log');
+            if (!terminal) return;
+            
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            let color = 'text-slate-300';
+            if (type === 'success') color = 'text-brand-green glow-green';
+            if (type === 'error') color = 'text-brand-red glow-red';
+            if (type === 'system') color = 'text-brand-cyan';
+
+            const div = document.createElement('div');
+            div.className = color;
+            div.innerHTML = `<span class="text-slate-600">[${time}]</span> ${msg}`;
+            
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight; // Auto-scroll to bottom
+        }
+
+        // ---------------------------------------------------
+        // 2. THREE.JS: AI Core Visualizer
+        // ---------------------------------------------------
+        let scene, camera, renderer, coreMesh, wireMesh, particles = [];
+
+        function init3D() {
+            const container = document.getElementById('canvas-3d');
+            if (!container) return;
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+            camera.position.z = 5;
+
+            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambient);
+            const pointLight = new THREE.PointLight(0x00F0FF, 2, 20);
+            pointLight.position.set(2, 2, 2);
+            scene.add(pointLight);
+            const pointLight2 = new THREE.PointLight(0xFF003C, 1, 20);
+            pointLight2.position.set(-2, -2, 2);
+            scene.add(pointLight2);
+
+            // AI Core Geometry
+            const geometry = new THREE.IcosahedronGeometry(1.2, 1);
+            
+            // Solid inner core
+            const materialSolid = new THREE.MeshStandardMaterial({ 
+                color: 0x050B14, 
+                emissive: 0x002030,
+                roughness: 0.2,
+                metalness: 0.8
+            });
+            coreMesh = new THREE.Mesh(geometry, materialSolid);
+            scene.add(coreMesh);
+
+            // Wireframe outer core
+            const materialWire = new THREE.MeshBasicMaterial({ 
+                color: 0x00F0FF, 
+                wireframe: true, 
+                transparent: true, 
+                opacity: 0.3 
+            });
+            wireMesh = new THREE.Mesh(geometry, materialWire);
+            wireMesh.scale.set(1.05, 1.05, 1.05);
+            scene.add(wireMesh);
+
+            // Floating data particles
+            const particleGeo = new THREE.SphereGeometry(0.03, 8, 8);
+            const particleMat = new THREE.MeshBasicMaterial({ color: 0x00F0FF });
+            for(let i=0; i<30; i++) {
+                let p = new THREE.Mesh(particleGeo, particleMat);
+                p.position.set((Math.random()-0.5)*6, (Math.random()-0.5)*4, (Math.random()-0.5)*4);
+                p.userData = {
+                    speedX: (Math.random()-0.5)*0.02,
+                    speedY: (Math.random()-0.5)*0.02
+                };
+                scene.add(p);
+                particles.push(p);
+            }
+
+            // Drag to rotate interaction
+            let isDragging = false, prevMouse = {x:0, y:0};
+            container.addEventListener('mousedown', () => isDragging = true);
+            window.addEventListener('mouseup', () => isDragging = false);
+            container.addEventListener('mousemove', (e) => {
+                if(isDragging) {
+                    const deltaX = e.offsetX - prevMouse.x;
+                    const deltaY = e.offsetY - prevMouse.y;
+                    coreMesh.rotation.y += deltaX * 0.01;
+                    coreMesh.rotation.x += deltaY * 0.01;
+                    wireMesh.rotation.y += deltaX * 0.01;
+                    wireMesh.rotation.x += deltaY * 0.01;
+                }
+                prevMouse = { x: e.offsetX, y: e.offsetY };
+            });
+
+            // Touch support for mobile rotation
+            container.addEventListener('touchstart', (e) => {
+                isDragging = true;
+                prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            });
+            window.addEventListener('touchend', () => isDragging = false);
+            container.addEventListener('touchmove', (e) => {
+                if(isDragging) {
+                    const deltaX = e.touches[0].clientX - prevMouse.x;
+                    const deltaY = e.touches[0].clientY - prevMouse.y;
+                    coreMesh.rotation.y += deltaX * 0.01;
+                    coreMesh.rotation.x += deltaY * 0.01;
+                    wireMesh.rotation.y += deltaX * 0.01;
+                    wireMesh.rotation.x += deltaY * 0.01;
+                    prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                if (!container) return;
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            });
+
+            animate3D();
+        }
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+            
+            // Auto rotation
+            coreMesh.rotation.y += 0.002;
+            wireMesh.rotation.x -= 0.001;
+            wireMesh.rotation.y += 0.003;
+
+            // Animate particles
+            particles.forEach(p => {
+                p.position.x += p.userData.speedX;
+                p.position.y += p.userData.speedY;
+                if(p.position.x > 3 || p.position.x < -3) p.userData.speedX *= -1;
+                if(p.position.y > 2 || p.position.y < -2) p.userData.speedY *= -1;
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // ---------------------------------------------------
+        // 3. LIGHTWEIGHT CHARTS
+        // ---------------------------------------------------
+        let tvChart, candleSeries, lastClose = 2000.00;
+        let currentCandle = null;
+
+        function initChart() {
+            const container = document.getElementById('tv-chart');
+            if (!container) return;
+
+            const chartOptions = { 
+                layout: { textColor: '#64748B', background: { type: 'solid', color: 'transparent' } },
+                grid: { vertLines: { color: 'rgba(30, 45, 74, 0.3)' }, horzLines: { color: 'rgba(30, 45, 74, 0.3)' } },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                timeScale: { borderColor: '#1E2D4A', timeVisible: true }
+            };
+            
+            tvChart = LightweightCharts.createChart(container, chartOptions);
+            candleSeries = tvChart.addSeries(LightweightCharts.CandlestickSeries, {
+                upColor: '#00FF66', downColor: '#FF003C', borderVisible: false,
+                wickUpColor: '#00FF66', wickDownColor: '#FF003C'
+            });
+
+            // Generate initial mock history data
+            const historicalData = [];
+            let time = Math.floor(Date.now() / 1000) - 3600;
+            for(let i = 0; i < 50; i++) {
+                let open = lastClose;
+                let close = open + (Math.random() - 0.5) * 4;
+                let high = Math.max(open, close) + Math.random() * 1.5;
+                let low = Math.min(open, close) - Math.random() * 1.5;
+                historicalData.push({ time: time, open, high, low, close });
+                lastClose = close;
+                time += 60;
+            }
+            candleSeries.setData(historicalData);
+            
+            currentCandle = {
+                time: Math.floor(Date.now() / 1000),
+                open: lastClose, high: lastClose, low: lastClose, close: lastClose
+            };
+
+            // Responsive chart resize
+            new ResizeObserver(entries => {
+                if (entries.length === 0 || entries[0].target !== container) return;
+                const newRect = entries[0].contentRect;
+                tvChart.applyOptions({ height: newRect.height, width: newRect.width });
+            }).observe(container);
+        }
+
+        // ---------------------------------------------------
+        // 4. SOCKET.IO (Koneksi ke MT5 via Cloudflare)
+        // ---------------------------------------------------
+        function initSocket() {
+            // GANTI LINK DI BAWAH INI SESUAI CLOUDFLARE ANDA!
+            const CLOUDFLARE_URL = "https://arthur-cio-pichunter-style.trycloudflare.com";
+            
+            logMsg(`Connecting to tunnel: ${CLOUDFLARE_URL}...`, 'system');
+            const socket = io(CLOUDFLARE_URL, {
+                reconnectionDelayMax: 10000,
+                transports: ['websocket', 'polling']
+            });
+
+            const connIndicator = document.getElementById('conn-indicator');
+            const connDot = document.getElementById('conn-dot');
+            const connText = document.getElementById('conn-text');
+            
+            const priceEl = document.getElementById('live-price');
+            const pnlEl = document.getElementById('live-pnl');
+            const statusEl = document.getElementById('bot-status');
+
+            socket.on('connect', () => {
+                logMsg("CONNECTION ESTABLISHED (Secure)", 'success');
+                connIndicator.className = "flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-900/30 border border-brand-green/50";
+                connDot.className = "w-2.5 h-2.5 rounded-full bg-brand-green animate-pulse";
+                connText.className = "text-xs font-mono font-bold text-brand-green";
+                connText.innerText = "ONLINE";
+            });
+
+            socket.on('disconnect', () => {
+                logMsg("CONNECTION LOST! Retrying...", 'error');
+                connIndicator.className = "flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-900/30 border border-brand-red/50";
+                connDot.className = "w-2.5 h-2.5 rounded-full bg-brand-red animate-pulse";
+                connText.className = "text-xs font-mono font-bold text-brand-red";
+                connText.innerText = "DISCONNECTED";
+            });
+
+            socket.on('market_update', (data) => {
+                // Update Harga
+                if(data.price) {
+                    const price = parseFloat(data.price);
+                    
+                    // Ganti warna harga: Hijau jika naik, Merah jika turun
+                    const prevPrice = parseFloat(priceEl.innerText) || 0;
+                    priceEl.innerText = price.toFixed(2);
+                    if(price > prevPrice) priceEl.className = "text-xl sm:text-2xl font-bold font-mono text-brand-green glow-green";
+                    else if (price < prevPrice) priceEl.className = "text-xl sm:text-2xl font-bold font-mono text-brand-red glow-red";
+                    else priceEl.className = "text-xl sm:text-2xl font-bold font-mono text-white";
+
+                    // Update Chart
+                    if (currentCandle) {
+                        const now = Math.floor(Date.now() / 1000);
+                        if (now - currentCandle.time > 60) { // New candle every minute
+                            currentCandle = { time: now, open: price, high: price, low: price, close: price };
+                        } else {
+                            currentCandle.close = price;
+                            currentCandle.high = Math.max(currentCandle.high, price);
+                            currentCandle.low = Math.min(currentCandle.low, price);
+                        }
+                        candleSeries.update(currentCandle);
+                    }
+                }
+
+                // Update PnL & Progress Bar
+                if(data.pnl !== undefined) {
+                    const pnl = parseFloat(data.pnl);
+                    pnlEl.innerText = (pnl >= 0 ? "+$" : "-$") + Math.abs(pnl).toFixed(2);
+                    pnlEl.className = pnl >= 0 ? "text-xl sm:text-2xl font-bold font-mono text-brand-green glow-green" : "text-xl sm:text-2xl font-bold font-mono text-brand-red glow-red";
+                    
+                    // Simulasi perhitungan target (Misal dari data PnL harian)
+                    // Jika data.dailyProfit disediakan MT5, pakai data tsb. Di sini pakai PnL sementara.
+                    const simulatedDaily = Math.max(0, pnl); // Dummy calc
+                    const target = 50.0;
+                    let pct = (simulatedDaily / target) * 100;
+                    if(pct > 100) pct = 100;
+                    
+                    document.getElementById('target-bar').style.width = `${pct}%`;
+                    document.getElementById('target-pct').innerText = `${pct.toFixed(1)}%`;
+                }
+
+                // Update Status Text
+                if(data.status) {
+                    statusEl.innerText = data.status;
+                    if(data.status.toUpperCase() === 'ACTIVE') {
+                        statusEl.className = "text-[10px] px-2 py-0.5 rounded bg-brand-green/20 text-brand-green font-mono border border-brand-green/50";
+                    } else {
+                        statusEl.className = "text-[10px] px-2 py-0.5 rounded bg-brand-border text-slate-300 font-mono border border-slate-600";
+                    }
+                }
+            });
+        }
+
+        // ---------------------------------------------------
+        // 5. INITIALIZATION BOOTSTRAP
+        // ---------------------------------------------------
+        window.onload = () => {
+            init3D();
+            initChart();
+            setTimeout(initSocket, 1500); // Beri jeda loading agar UI render dulu
+        };
+
+    </script>
+</body>
+</html>
